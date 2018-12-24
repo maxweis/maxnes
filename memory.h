@@ -1,4 +1,6 @@
-enum ADDR_MODE {
+#pragma once
+
+typedef enum ADDR_MODE {
     IMMEDIATE,
     ABSOLUTE,
     ZERO_PAGE,
@@ -12,4 +14,4 @@ enum ADDR_MODE {
     RELATIVE,
     INDIRECT,
     ZERO_PAGE_Y
-};
+} ADDR_MODE;
