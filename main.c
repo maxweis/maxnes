@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "rom.h"
+#include "instruction.h"
 
 int main(int argc, char *argv[]) {
     char *path = "mario.nes";
@@ -14,9 +15,11 @@ int main(int argc, char *argv[]) {
 
     Rom rom;
 
-    if (!parse_rom(rom_file, &rom.prg, &rom.chr)) {
+    if (!parse_rom(rom_file, &rom)) {
         fprintf(stderr, "Error: rom unrecognized format\n");
         return -1;
+    } else {
+        parse_insts(&rom);
     }
 
     if (rom_file != NULL) {
