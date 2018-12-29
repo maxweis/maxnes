@@ -5,6 +5,8 @@
 #include "rom.h"
 #include "cpu.h"
 
+extern const char* inst_names[];
+
 typedef enum INST_OP {
         NOP,           ADC_OP,        AND_OP,        ASL_OP,
         BCC_OP,        BCS_OP,        BEQ_OP,        BIT_OP,
@@ -28,8 +30,9 @@ typedef struct Inst {
         unsigned cycles;                        // cycles required to execute instruction
         unsigned page_cross_cycles;             // additional cycles if page crossed
         unsigned branch_succeeds_cycles;        // additional cycles if branch successful
-        ADDR_MODE addr_mode;
-        INST_OP inst_type;
+        ADDR_MODE addr_mode;                    // addressing mode of instruction
+        INST_OP inst_type;                      // operation executed by instruction
+        uint16_t operand_val;                  // value of operand used by instruction (memory locations accessed, jump relative distance)
 } Inst;
 
 void classify_inst(uint8_t opcode, Inst *inst);

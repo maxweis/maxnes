@@ -1,6 +1,23 @@
 #include "instruction.h"
 #include <stdlib.h>
 
+const char* inst_names[] = {
+        "NOP",           "ADC",        "AND",        "ASL",
+        "BCC",        "BCS",        "BEQ",        "BIT",
+        "BMI",        "BNE",        "BPL",        "BRK",
+        "BVC",        "BVS",        "CLC",        "CLD",
+        "CLI",        "CLV",        "CMP",        "CPX",
+        "CPY",        "DEC",        "DEX",        "DEY",
+        "EOR",        "INC",        "INX",        "INY",
+        "JMP",        "JSR",        "LDA",        "LDX",
+        "LDY",        "LSR",        "ORA",        "PHA",
+        "PHP",        "PLA",        "PLP",        "ROL",
+        "ROR",        "RTI",        "RTS",        "SBC",
+        "SEC",        "SED",        "SEI",        "STA",
+        "STX",        "STY",        "TAX",        "TAY",
+        "TSX",        "TXA",        "TXS",        "TYA"
+};
+
 void parse_insts(ROM *rom) {
      rom->prg_inst = (Inst*) calloc(rom->prg_len, sizeof(Inst)); // liberal estimate that each instruction is single byte
 
@@ -22,20 +39,84 @@ void parse_insts(ROM *rom) {
     rom->prg_inst = (Inst*) realloc(rom->prg_inst, inst_amount * sizeof(Inst)); // reallocate array to minimum necessary size
 }
 
-void exec_adc_op(CPU *cpu, Inst *inst) {
-    uint8_t addend;
-    switch (inst->addr_mode) {
-        /*case IMMEDIATE:*/
-            /*addend = inst->body[0];*/
-            /*break;*/
-        /*case ZERO_PAGE:*/
-
+void update_inst_operand(NES *nes, Inst *inst) {
+    uint16_t addr;
+    switch(inst->addr_mode) {
+        case IMPLIED:
+            inst->operand_val = 0;
+            break;
+        case ACCUMULATOR:
+            inst->operand_val = nes->cpu->acc_reg;
+            break;
+        case IMMEDIATE:
+            inst->operand_val = (uint16_t) inst->body[0];
+            break;
+        case ZERO_PAGE:
+            inst->operand_val = nes->ram[inst->body[0]];
+            break;
+        case  ZERO_PAGE_X:
+            addr = (inst->body[0] + nes->cpu->x_reg) % ZERO_PAGE_SIZE;
+            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+                inst->page_cross_cycles = 0;
+            }
+            inst->operand_val = nes->ram[addr];
+            break;
+        case ZERO_PAGE_Y:
+            addr = (inst->body[0] + nes->cpu->y_reg) % ZERO_PAGE_SIZE;
+            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+                inst->page_cross_cycles = 0;
+            }
+            inst->operand_val = nes->ram[addr];
+            break;
+        case RELATIVE:
+            inst->operand_val = inst->body[0];
+            break;
+        case ABSOLUTE:
+            addr = (inst->body[1] << 8) | inst->body[0];
+            inst->operand_val = nes->ram[addr];
+            break;
+        case ABSOLUTE_X:
+            addr = ((inst->body[1] << 8) | inst->body[0]) + nes->cpu->x_reg;
+            inst->operand_val = nes->ram[addr];
+            break;
+        case ABSOLUTE_Y:
+            addr = ((inst->body[1] << 8) | inst->body[0]) + nes->cpu->y_reg;
+            inst->operand_val = nes->ram[addr];
+            break;
+        case INDIRECT:
+            addr = (inst->body[1] << 8) | inst->body[0];
+            inst->operand_val = (nes->ram[addr + 1] << 8) | nes->ram[addr];
+            break;
+        case INDIRECT_X:
+            addr = inst->body[0] + nes->cpu->x_reg;
+            inst->operand_val  = (nes->ram[addr + 1] << 8) | nes->ram[addr];
+            break;
+        case INDIRECT_Y:
+            addr = nes->ram[inst->body[0]] + nes->cpu->y_reg;
+            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+                inst->page_cross_cycles = 0;
+            }
+            inst->operand_val = nes->ram[addr];
+        default:
+            fprintf(stderr, "Instruction uses invalid memory addressing mode\n");
+            break;
     }
 }
 
-void exec_inst(CPU *cpu, Inst *inst) {
+void exec_adc_op(NES *nes, Inst *inst) {
+    int sum = nes->cpu->acc_reg + inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY); // signed, higher-precision value to check for overflow, carry
+    nes->cpu->acc_reg += inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY);
+    set_cpu_status_bit(nes->cpu, CARRY, sum > 255);
+    set_cpu_status_bit(nes->cpu, ZERO, !sum);
+    set_cpu_status_bit(nes->cpu, OVERFLOW, sum > 255 || sum < 0);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
+}
+
+void exec_inst(NES *nes, Inst *inst) {
+    update_inst_operand(nes, inst);
     switch(inst->inst_type) {
         case ADC_OP:
+            exec_adc_op(nes, inst);
             break;
         case AND_OP:
             break;
