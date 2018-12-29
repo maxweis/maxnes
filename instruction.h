@@ -1,7 +1,8 @@
 #pragma once
 #include <stdint.h>
-#include "memory.h"
+#include "ram.h"
 #include "rom.h"
+#include "cpu.h"
 
 typedef enum INST_OP {
         NOP,           ADC_OP,        AND_OP,        ASL_OP,
@@ -31,4 +32,4 @@ typedef struct Inst {
 } Inst;
 
 void classify_inst(uint8_t opcode, Inst *inst);
-void parse_insts(Rom *rom);
+void parse_insts(ROM *rom);

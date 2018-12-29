@@ -1,7 +1,7 @@
 #include "instruction.h"
 #include <stdlib.h>
 
-void parse_insts(Rom *rom) {
+void parse_insts(ROM *rom) {
      rom->prg_inst = (Inst*) calloc(rom->prg_len, sizeof(Inst)); // liberal estimate that each instruction is single byte
 
     unsigned inst_amount = 0;
@@ -20,6 +20,135 @@ void parse_insts(Rom *rom) {
 
     rom->inst_amount = inst_amount;
     rom->prg_inst = (Inst*) realloc(rom->prg_inst, inst_amount * sizeof(Inst)); // reallocate array to minimum necessary size
+}
+
+void exec_adc_op(CPU *cpu, Inst *inst) {
+    uint8_t addend;
+    switch (inst->addr_mode) {
+        /*case IMMEDIATE:*/
+            /*addend = inst->body[0];*/
+            /*break;*/
+        /*case ZERO_PAGE:*/
+
+    }
+}
+
+void exec_inst(CPU *cpu, Inst *inst) {
+    switch(inst->inst_type) {
+        case ADC_OP:
+            break;
+        case AND_OP:
+            break;
+        case ASL_OP:
+            break;
+        case BCC_OP:
+            break;
+        case BCS_OP:
+            break;
+        case BEQ_OP:
+            break;
+        case BIT_OP:
+            break;
+        case BMI_OP:
+            break;
+        case BNE_OP:
+            break;
+        case BPL_OP:
+            break;
+        case BRK_OP:
+            break;
+        case BVC_OP:
+            break;
+        case BVS_OP:
+            break;
+        case CLC_OP:
+            break;
+        case CLD_OP:
+            break;
+        case CLI_OP:
+            break;
+        case CLV_OP:
+            break;
+        case CMP_OP:
+            break;
+        case CPX_OP:
+            break;
+        case CPY_OP:
+            break;
+        case DEC_OP:
+            break;
+        case DEX_OP:
+            break;
+        case DEY_OP:
+            break;
+        case EOR_OP:
+            break;
+        case INC_OP:
+            break;
+        case INX_OP:
+            break;
+        case INY_OP:
+            break;
+        case JMP_OP:
+            break;
+        case JSR_OP:
+            break;
+        case LDA_OP:
+            break;
+        case LDX_OP:
+            break;
+        case LDY_OP:
+            break;
+        case LSR_OP:
+            break;
+        case ORA_OP:
+            break;
+        case PHA_OP:
+            break;
+        case PHP_OP:
+            break;
+        case PLA_OP:
+            break;
+        case PLP_OP:
+            break;
+        case ROL_OP:
+            break;
+        case ROR_OP:
+            break;
+        case RTI_OP:
+            break;
+        case RTS_OP:
+            break;
+        case SBC_OP:
+            break;
+        case SEC_OP:
+            break;
+        case SED_OP:
+            break;
+        case SEI_OP:
+            break;
+        case STA_OP:
+            break;
+        case STX_OP:
+            break;
+        case STY_OP:
+            break;
+        case TAX_OP:
+            break;
+        case TAY_OP:
+            break;
+        case TSX_OP:
+            break;
+        case TXA_OP:
+            break;
+        case TXS_OP:
+            break;
+        case TYA_OP:
+            break;
+        case NOP:
+        default:
+            break;
+    }
 }
 
 void classify_inst(uint8_t opcode, Inst *inst) {
