@@ -1,8 +1,8 @@
-#include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "instruction.h"
+#include "nes.h"
 
 int main(int argc, char *argv[]) {
     char *path = "mario.nes";
@@ -13,20 +13,20 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    ROM rom;
+    NES nes;
 
-    if (!parse_rom(rom_file, &rom)) {
+    if (!parse_rom(rom_file, nes.rom)) {
         fprintf(stderr, "Error: rom unrecognized format\n");
         return -1;
     } else {
-        parse_insts(&rom);
+        parse_insts(nes.rom);
     }
 
     if (rom_file != NULL) {
         fclose(rom_file);
     }
 
-    close_rom(&rom);
+    close_rom(nes.rom);
 
     return 0;
 }

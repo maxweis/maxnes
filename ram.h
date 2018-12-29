@@ -1,6 +1,7 @@
 #pragma once
+
 #include <stdint.h>
-#include "main.h"
+#include "nes.h"
 
 typedef struct NES NES;
 

@@ -1,7 +1,7 @@
 #pragma once
-#include "rom.h"
+
 #include "cpu.h"
-#include "ram.h"
+#include "rom.h"
 
 typedef struct NES {
         CPU *cpu;
