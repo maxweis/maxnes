@@ -12,7 +12,7 @@
 
 typedef struct Inst Inst;
 
-typedef struct Rom {
+typedef struct ROM {
     char *path;
     uint8_t *prg;
     unsigned prg_len;
@@ -20,7 +20,7 @@ typedef struct Rom {
     unsigned chr_len;
     Inst *prg_inst;
     unsigned inst_amount;
-} Rom;
+} ROM;
 
-bool parse_rom(FILE *rom_file, Rom *rom_path);
-void close_rom(Rom *rom);
+bool parse_rom(FILE *rom_file, ROM *rom_path);
+void close_rom(ROM *rom);

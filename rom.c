@@ -1,7 +1,7 @@
 #include "rom.h"
 #include "instruction.h"
 
-bool parse_rom(FILE *rom_file, Rom *rom) {
+bool parse_rom(FILE *rom_file, ROM *rom) {
     if (rom_file == NULL) {
         return false;
     }
@@ -40,7 +40,7 @@ bool parse_rom(FILE *rom_file, Rom *rom) {
     return true;
 }
 
-void close_rom(Rom *rom) {
+void close_rom(ROM *rom) {
     free(rom->prg);
     free(rom->chr);
     for (unsigned i = 0; i < rom->inst_amount; i++) {
