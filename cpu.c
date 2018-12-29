@@ -11,3 +11,7 @@ void set_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position, bool value) {
 bool get_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position) {
     return (cpu->status_reg & (1 << bit_position)) >> bit_position;
 }
+
+bool get_bit(uint8_t byte, unsigned pos) {
+    return byte & (1 << pos);
+}
