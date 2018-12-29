@@ -47,4 +47,5 @@ void close_rom(ROM *rom) {
         free(rom->prg_inst[i].body);
     }
     free(rom->prg_inst);
+    free(rom);
 }

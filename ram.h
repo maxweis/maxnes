@@ -3,22 +3,25 @@
 #include <stdint.h>
 #include "nes.h"
 
+#define NES_RAM_SIZE 2048
+#define ZERO_PAGE_SIZE 256 
+
 typedef struct NES NES;
 
 typedef enum ADDR_MODE {
-    IMMEDIATE,
-    ABSOLUTE,
-    ZERO_PAGE,
-    ACCUMULATOR,
     IMPLIED,
-    INDIRECT_X,
-    INDIRECT_Y,
+    ACCUMULATOR,
+    IMMEDIATE,
+    ZERO_PAGE,
     ZERO_PAGE_X,
+    ZERO_PAGE_Y,
+    RELATIVE,
+    ABSOLUTE,
     ABSOLUTE_X,
     ABSOLUTE_Y,
-    RELATIVE,
     INDIRECT,
-    ZERO_PAGE_Y
+    INDIRECT_X,
+    INDIRECT_Y
 } ADDR_MODE;
 
-uint8_t ram_read(NES *nes, uint16_t addr);
+uint8_t ram_read(uint8_t *ram, uint16_t addr);

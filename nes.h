@@ -10,3 +10,6 @@ typedef struct NES {
         uint8_t *ram;
         ROM *rom;
 } NES;
+
+NES *new_NES();
+void delete_nes(NES *nes);
