@@ -1,7 +1,7 @@
+#include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include "rom.h"
 #include "instruction.h"
 
 int main(int argc, char *argv[]) {
@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    Rom rom;
+    ROM rom;
 
     if (!parse_rom(rom_file, &rom)) {
         fprintf(stderr, "Error: rom unrecognized format\n");
