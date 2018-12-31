@@ -107,7 +107,9 @@ void update_inst_operand(NES *nes, Inst *inst) {
             inst->operand_val = *access_ram(nes->ram, addr);
             inst->operand_mem_addr = addr;
         default:
+            delete_nes(nes);
             fprintf(stderr, "Instruction uses invalid memory addressing mode\n");
+            exit(-1);
             break;
     }
 }
@@ -135,12 +137,13 @@ inline void update_cpu_status(NES *nes, uint8_t value) {
 // individual instruction execution functions
 
 void exec_adc_op(NES *nes, Inst *inst) {
-    int sum = nes->cpu->acc_reg + inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY); // signed, higher-precision value to check for overflow, carry
-    nes->cpu->acc_reg += inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY);
+    uint8_t sum = nes->cpu->acc_reg + inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY); // signed, higher-precision value to check for overflow, carry
+    set_cpu_status_bit(nes->cpu, OVERFLOW, 
+            (nes->cpu->acc_reg ^ sum) & (inst->operand_val ^ sum) & 0x80); // overflow formula courtesy of http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+    nes->cpu->acc_reg = sum;
     set_cpu_status_bit(nes->cpu, CARRY, sum > 255);
     set_cpu_status_bit(nes->cpu, ZERO, !sum);
-    set_cpu_status_bit(nes->cpu, OVERFLOW, sum > 255 || sum < 0);
-    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(sum, 7));
 }
 
 void exec_and_op(NES *nes, Inst *inst) {
@@ -150,6 +153,7 @@ void exec_and_op(NES *nes, Inst *inst) {
 
 void exec_asl_op(NES *nes, Inst *inst) {
     inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+
     uint8_t operand;
     if (inst->addr_mode == ACCUMULATOR) {
         set_cpu_status_bit(nes->cpu, CARRY, get_bit(nes->cpu->acc_reg, 7)); // most significant bit moved to carry
@@ -310,6 +314,7 @@ void exec_ldy_op(NES *nes, Inst *inst) {
 
 void exec_lsr_op(NES *nes, Inst *inst) {
     inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+
     uint8_t operand;
     if (inst->addr_mode == ACCUMULATOR) {
         set_cpu_status_bit(nes->cpu, CARRY, get_bit(nes->cpu->acc_reg, 7)); // most significant bit moved to carry
@@ -320,6 +325,135 @@ void exec_lsr_op(NES *nes, Inst *inst) {
     }
     set_cpu_status_bit(nes->cpu, ZERO, !operand);
     set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(operand, 7));
+}
+
+void exec_ora_op(NES *nes, Inst *inst) {
+    update_cpu_status(nes, nes->cpu->acc_reg |= inst->operand_val);
+}
+
+void exec_pha_op(NES *nes) {
+    stack_push(nes, nes->cpu->acc_reg);
+}
+
+void exec_php_op(NES *nes) {
+    stack_push(nes, nes->cpu->status_reg);
+}
+
+void exec_pla_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->acc_reg = stack_pull(nes));
+}
+
+void exec_plp_op(NES *nes) {
+    nes->cpu->status_reg = stack_pull(nes);
+}
+
+void exec_rol_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+
+    if (inst->addr_mode == ACCUMULATOR) {
+        bool new_carry = get_bit(nes->cpu->acc_reg, 7);
+        nes->cpu->acc_reg <<= 1;
+        set_bit(&nes->cpu->acc_reg, 0, get_cpu_status_bit(nes->cpu, CARRY));
+        set_cpu_status_bit(nes->cpu, CARRY, new_carry);
+        set_cpu_status_bit(nes->cpu, ZERO, !nes->cpu->acc_reg);
+        set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
+    } else { // rotate memory value
+        bool new_carry = get_bit(inst->operand_val, 7);
+        uint8_t *byte = access_ram(nes->ram, inst->operand_mem_addr);
+        *byte <<= 1;
+        set_bit(byte, 0, get_cpu_status_bit(nes->cpu, CARRY));
+        set_cpu_status_bit(nes->cpu, CARRY, new_carry);
+        set_cpu_status_bit(nes->cpu, ZERO, !(*byte));
+        set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(*byte, 7));
+    }
+}
+
+void exec_ror_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+
+    if (inst->addr_mode == ACCUMULATOR) {
+        bool new_carry = get_bit(nes->cpu->acc_reg, 0);
+        nes->cpu->acc_reg >>= 1;
+        set_bit(&nes->cpu->acc_reg, 7, get_cpu_status_bit(nes->cpu, CARRY));
+        set_cpu_status_bit(nes->cpu, CARRY, new_carry);
+        set_cpu_status_bit(nes->cpu, ZERO, !nes->cpu->acc_reg);
+        set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
+    } else { // rotate memory value
+        bool new_carry = get_bit(inst->operand_val, 0);
+        uint8_t *byte = access_ram(nes->ram, inst->operand_mem_addr);
+        *byte >>= 1;
+        set_bit(byte, 7, get_cpu_status_bit(nes->cpu, CARRY));
+        set_cpu_status_bit(nes->cpu, CARRY, new_carry);
+        set_cpu_status_bit(nes->cpu, ZERO, !(*byte));
+        set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(*byte, 7));
+    }
+}
+
+void exec_rti_op(NES *nes) {
+    nes->cpu->status_reg = stack_pull(nes);
+    nes->cpu->program_c = stack_pull16(nes);
+}
+
+void exec_rts_op(NES *nes) {
+    nes->cpu->program_c = stack_pull16(nes);
+}
+
+void exec_sbc_op(NES *nes, Inst *inst) {
+    uint16_t difference = nes->cpu->acc_reg - inst->operand_val - !get_cpu_status_bit(nes->cpu, CARRY); // signed, higher-precision value to check for overflow, carry
+    set_cpu_status_bit(nes->cpu, OVERFLOW, 
+            (nes->cpu->acc_reg ^ difference) & (inst->operand_val ^ difference) & 0x80); // overflow formula courtesy of http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+    nes->cpu->acc_reg -= inst->operand_val - !get_cpu_status_bit(nes->cpu, CARRY);
+    set_cpu_status_bit(nes->cpu, CARRY, difference > 255);
+    set_cpu_status_bit(nes->cpu, ZERO, !difference);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
+}
+
+void exec_sec_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, CARRY, 1);
+}
+
+void exec_sed_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, DECIMAL, 1);
+}
+
+void exec_sei_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, IRQ_DISABLE, 1);
+}
+
+void exec_sta_op(NES *nes, Inst *inst) {
+    *access_ram(nes->ram, inst->operand_mem_addr) = nes->cpu->acc_reg;
+}
+
+void exec_stx_op(NES *nes, Inst *inst) {
+    *access_ram(nes->ram, inst->operand_mem_addr) = nes->cpu->x_reg;
+}
+
+void exec_sty_op(NES *nes, Inst *inst) {
+    *access_ram(nes->ram, inst->operand_mem_addr) = nes->cpu->y_reg;
+}
+
+void exec_tax_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->x_reg = nes->cpu->acc_reg);
+}
+
+void exec_tay_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->y_reg = nes->cpu->acc_reg);
+}
+
+void exec_tsx_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->x_reg = nes->cpu->stack_p);
+}
+
+void exec_txa_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->acc_reg = nes->cpu->x_reg);
+}
+
+void exec_txs_op(NES *nes) {
+    nes->cpu->stack_p = nes->cpu->x_reg;
+}
+
+void exec_tya_op(NES *nes) {
+    update_cpu_status(nes, nes->cpu->acc_reg = nes->cpu->y_reg);
 }
 
 void exec_inst(NES *nes, Inst *inst) {
@@ -425,51 +559,77 @@ void exec_inst(NES *nes, Inst *inst) {
             exec_lsr_op(nes, inst);
             break;
         case ORA_OP:
+            exec_ora_op(nes, inst);
             break;
         case PHA_OP:
+            exec_pha_op(nes);
             break;
         case PHP_OP:
+            exec_php_op(nes);
             break;
         case PLA_OP:
+            exec_pla_op(nes);
             break;
         case PLP_OP:
+            exec_plp_op(nes);
             break;
         case ROL_OP:
+            exec_rol_op(nes, inst);
             break;
         case ROR_OP:
+            exec_ror_op(nes, inst);
             break;
         case RTI_OP:
+            exec_rti_op(nes);
             break;
         case RTS_OP:
+            exec_rts_op(nes);
             break;
         case SBC_OP:
+            exec_sbc_op(nes, inst);
             break;
         case SEC_OP:
+            exec_sec_op(nes);
             break;
         case SED_OP:
+            exec_sed_op(nes);
             break;
         case SEI_OP:
+            exec_sei_op(nes);
             break;
         case STA_OP:
+            exec_sta_op(nes, inst);
             break;
         case STX_OP:
+            exec_stx_op(nes, inst);
             break;
         case STY_OP:
+            exec_sty_op(nes, inst);
             break;
         case TAX_OP:
+            exec_sty_op(nes, inst);
             break;
         case TAY_OP:
+            exec_tay_op(nes);
             break;
         case TSX_OP:
+            exec_tsx_op(nes);
             break;
         case TXA_OP:
+            exec_txa_op(nes);
             break;
         case TXS_OP:
+            exec_txs_op(nes);
             break;
         case TYA_OP:
+            exec_tya_op(nes);
             break;
         case NOP:
+            break;
         default:
+            delete_nes(nes);
+            fprintf(stderr, "Unsupported opcode");
+            exit(-1);
             break;
     }
 }

@@ -34,7 +34,7 @@ typedef struct Inst {
         unsigned cycles;                        // cycles required to execute instruction
         unsigned page_cross_cycles;             // additional cycles if page crossed
         unsigned branch_succeeds_cycles;        // additional cycles if branch successful
-        unsigned addr_mode;                    // addressing mode of instruction
+        ADDR_MODE addr_mode;                     // addressing mode of instruction
         INST_OP inst_type;                      // operation executed by instruction
         uint16_t operand_val;                   // value of operand used by instruction (memory locations accessed, jump relative distance)
         uint16_t operand_mem_addr;              // memory address of operand for stores
@@ -78,3 +78,25 @@ void exec_lda_op(NES *nes, Inst *inst);
 void exec_ldx_op(NES *nes, Inst *inst);
 void exec_ldy_op(NES *nes, Inst *inst);
 void exec_lsr_op(NES *nes, Inst *inst);
+void exec_ora_op(NES *nes, Inst *inst);
+void exec_pha_op(NES *nes);
+void exec_php_op(NES *nes);
+void exec_pla_op(NES *nes);
+void exec_plp_op(NES *nes);
+void exec_rol_op(NES *nes, Inst *inst);
+void exec_ror_op(NES *nes, Inst *inst);
+void exec_rti_op(NES *nes);
+void exec_rts_op(NES *nes);
+void exec_sbc_op(NES *nes, Inst *inst);
+void exec_sec_op(NES *nes);
+void exec_sed_op(NES *nes);
+void exec_sei_op(NES *nes);
+void exec_sta_op(NES *nes, Inst *inst);
+void exec_stx_op(NES *nes, Inst *inst);
+void exec_sty_op(NES *nes, Inst *inst);
+void exec_tax_op(NES *nes);
+void exec_tay_op(NES *nes);
+void exec_tsx_op(NES *nes);
+void exec_txa_op(NES *nes);
+void exec_txs_op(NES *nes);
+void exec_tya_op(NES *nes);
