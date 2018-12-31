@@ -5,6 +5,10 @@
 #include "rom.h"
 #include "cpu.h"
 
+typedef struct ROM ROM;
+typedef struct NES NES;
+typedef enum ADDR_MODE ADDR_MODE;
+
 extern const char* inst_names[];
 
 typedef enum INST_OP {
@@ -30,10 +34,47 @@ typedef struct Inst {
         unsigned cycles;                        // cycles required to execute instruction
         unsigned page_cross_cycles;             // additional cycles if page crossed
         unsigned branch_succeeds_cycles;        // additional cycles if branch successful
-        ADDR_MODE addr_mode;                    // addressing mode of instruction
+        unsigned addr_mode;                    // addressing mode of instruction
         INST_OP inst_type;                      // operation executed by instruction
-        uint16_t operand_val;                  // value of operand used by instruction (memory locations accessed, jump relative distance)
+        uint16_t operand_val;                   // value of operand used by instruction (memory locations accessed, jump relative distance)
+        uint16_t operand_mem_addr;              // memory address of operand for stores
 } Inst;
 
 void classify_inst(uint8_t opcode, Inst *inst);
 void parse_insts(ROM *rom);
+void exec_inst(NES *nes, Inst *inst);
+void exec_branch(NES *nes, Inst *inst, bool condition);
+void update_cpu_status(NES *nes, uint8_t value);
+void exec_adc_op(NES *nes, Inst *inst);
+void exec_and_op(NES *nes, Inst *inst);
+void exec_asl_op(NES *nes, Inst *inst);
+void exec_bcc_op(NES *nes, Inst *inst);
+void exec_bcs_op(NES *nes, Inst *inst);
+void exec_beq_op(NES *nes, Inst *inst);
+void exec_bit_op(NES *nes, Inst *inst);
+void exec_bmi_op(NES *nes, Inst *inst);
+void exec_bne_op(NES *nes, Inst *inst);
+void exec_bpl_op(NES *nes, Inst *inst);
+void exec_brk_op(NES *nes);
+void exec_bvc_op(NES *nes, Inst *inst);
+void exec_bvs_op(NES *nes, Inst *inst);
+void exec_clc_op(NES *nes);
+void exec_cld_op(NES *nes);
+void exec_cli_op(NES *nes);
+void exec_clv_op(NES *nes);
+void exec_cmp_op(NES *nes, Inst *inst);
+void exec_cpx_op(NES *nes, Inst *inst);
+void exec_cpy_op(NES *nes, Inst *inst);
+void exec_dec_op(NES *nes, Inst *inst);
+void exec_dex_op(NES *nes);
+void exec_dey_op(NES *nes);
+void exec_eor_op(NES *nes, Inst *inst);
+void exec_inc_op(NES *nes, Inst *inst);
+void exec_inx_op(NES *nes);
+void exec_iny_op(NES *nes);
+void exec_jmp_op(NES *nes, Inst *inst);
+void exec_jsr_op(NES *nes, Inst *inst);
+void exec_lda_op(NES *nes, Inst *inst);
+void exec_ldx_op(NES *nes, Inst *inst);
+void exec_ldy_op(NES *nes, Inst *inst);
+void exec_lsr_op(NES *nes, Inst *inst);

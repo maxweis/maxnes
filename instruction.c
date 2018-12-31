@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 const char* inst_names[] = {
-        "NOP",           "ADC",        "AND",        "ASL",
+        "NOP",        "ADC",        "AND",        "ASL",
         "BCC",        "BCS",        "BEQ",        "BIT",
         "BMI",        "BNE",        "BPL",        "BRK",
         "BVC",        "BVS",        "CLC",        "CLD",
@@ -43,7 +43,7 @@ void update_inst_operand(NES *nes, Inst *inst) {
     uint16_t addr;
     switch(inst->addr_mode) {
         case IMPLIED:
-            inst->operand_val = 0;
+            // no operand storing necessary
             break;
         case ACCUMULATOR:
             inst->operand_val = nes->cpu->acc_reg;
@@ -52,56 +52,87 @@ void update_inst_operand(NES *nes, Inst *inst) {
             inst->operand_val = (uint16_t) inst->body[0];
             break;
         case ZERO_PAGE:
-            inst->operand_val = nes->ram[inst->body[0]];
+            inst->operand_val = *access_ram(nes->ram, inst->body[0]);
+            inst->operand_mem_addr = inst->body[0];
             break;
         case  ZERO_PAGE_X:
             addr = (inst->body[0] + nes->cpu->x_reg) % ZERO_PAGE_SIZE;
-            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+            if (!page_crossed(inst->body[0], addr)) { // page boundary not crossed, no need for extra cycles
                 inst->page_cross_cycles = 0;
             }
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case ZERO_PAGE_Y:
             addr = (inst->body[0] + nes->cpu->y_reg) % ZERO_PAGE_SIZE;
-            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+            if (!page_crossed(inst->body[0], addr)) { // page boundary not crossed, no need for extra cycles
                 inst->page_cross_cycles = 0;
             }
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case RELATIVE:
             inst->operand_val = inst->body[0];
             break;
         case ABSOLUTE:
             addr = (inst->body[1] << 8) | inst->body[0];
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case ABSOLUTE_X:
             addr = ((inst->body[1] << 8) | inst->body[0]) + nes->cpu->x_reg;
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case ABSOLUTE_Y:
             addr = ((inst->body[1] << 8) | inst->body[0]) + nes->cpu->y_reg;
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case INDIRECT:
             addr = (inst->body[1] << 8) | inst->body[0];
-            inst->operand_val = (nes->ram[addr + 1] << 8) | nes->ram[addr];
+            inst->operand_val = (*access_ram(nes->ram, addr + 1) << 8) | *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case INDIRECT_X:
             addr = inst->body[0] + nes->cpu->x_reg;
-            inst->operand_val  = (nes->ram[addr + 1] << 8) | nes->ram[addr];
+            inst->operand_val = (*access_ram(nes->ram, addr + 1) << 8) | *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
             break;
         case INDIRECT_Y:
-            addr = nes->ram[inst->body[0]] + nes->cpu->y_reg;
-            if (addr < ZERO_PAGE_SIZE) { // page boundary crossed, no need for extra cycles
+            addr = *access_ram(nes->ram, inst->body[0]) + nes->cpu->y_reg;
+            if (!page_crossed(inst->body[0], addr)) { // page boundary not crossed, no need for extra cycles
                 inst->page_cross_cycles = 0;
             }
-            inst->operand_val = nes->ram[addr];
+            inst->operand_val = *access_ram(nes->ram, addr);
+            inst->operand_mem_addr = addr;
         default:
             fprintf(stderr, "Instruction uses invalid memory addressing mode\n");
             break;
     }
 }
+
+// generalized branch instruction
+inline void exec_branch(NES *nes, Inst *inst, bool condition) {
+    uint16_t old_program_c = nes->cpu->program_c;
+    if (condition) { // follow branch
+        nes->cpu->program_c += inst->operand_val;
+    } else {
+        inst->branch_succeeds_cycles = 0;
+    }
+
+    if (!page_crossed(old_program_c, nes->cpu->program_c)) {
+        inst->page_cross_cycles = 0;
+    }
+}
+
+// common case of updating zero and negative flags 
+inline void update_cpu_status(NES *nes, uint8_t value) {
+    set_cpu_status_bit(nes->cpu, ZERO, !value);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(value, 7));
+}
+
+// individual instruction execution functions
 
 void exec_adc_op(NES *nes, Inst *inst) {
     int sum = nes->cpu->acc_reg + inst->operand_val + get_cpu_status_bit(nes->cpu, CARRY); // signed, higher-precision value to check for overflow, carry
@@ -112,6 +143,185 @@ void exec_adc_op(NES *nes, Inst *inst) {
     set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(nes->cpu->acc_reg, 7));
 }
 
+void exec_and_op(NES *nes, Inst *inst) {
+    nes->cpu->acc_reg &= inst->operand_val;
+    update_cpu_status(nes, nes->cpu->acc_reg);
+}
+
+void exec_asl_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+    uint8_t operand;
+    if (inst->addr_mode == ACCUMULATOR) {
+        set_cpu_status_bit(nes->cpu, CARRY, get_bit(nes->cpu->acc_reg, 7)); // most significant bit moved to carry
+        operand = (nes->cpu->acc_reg <<= 1);
+    } else { // shift memory contents
+        set_cpu_status_bit(nes->cpu, CARRY, get_bit(*access_ram(nes->ram, inst->operand_mem_addr), 7)); // most significant bit moved to carry
+        operand = (*access_ram(nes->ram, inst->operand_mem_addr) <<= 1);
+    }
+    set_cpu_status_bit(nes->cpu, ZERO, !operand);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(operand, 7));
+}
+
+void exec_bcc_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, !get_cpu_status_bit(nes->cpu, CARRY));
+}
+
+void exec_bcs_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, get_cpu_status_bit(nes->cpu, CARRY));
+}
+
+void exec_beq_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, get_cpu_status_bit(nes->cpu, ZERO));
+}
+
+void exec_bit_op(NES *nes, Inst *inst) {
+    uint8_t result = nes->cpu->acc_reg & inst->operand_val;
+    set_cpu_status_bit(nes->cpu, ZERO, result);
+    set_cpu_status_bit(nes->cpu, OVERFLOW, get_bit(result, 6));
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(result, 7));
+}
+
+void exec_bmi_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, get_cpu_status_bit(nes->cpu, NEGATIVE));
+}
+
+void exec_bne_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, !get_cpu_status_bit(nes->cpu, ZERO));
+}
+
+void exec_bpl_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, !get_cpu_status_bit(nes->cpu, NEGATIVE));
+}
+
+void exec_brk_op(NES *nes) { // force interrupt
+    stack_push16(nes, nes->cpu->program_c);
+    stack_push(nes, nes->cpu->status_reg);
+    nes->cpu->program_c = 0xfffe;
+    set_cpu_status_bit(nes->cpu, BRK, 1);
+}
+
+void exec_bvc_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, !get_cpu_status_bit(nes->cpu, OVERFLOW));
+}
+
+void exec_bvs_op(NES *nes, Inst *inst) {
+    exec_branch(nes, inst, get_cpu_status_bit(nes->cpu, OVERFLOW));
+}
+
+void exec_clc_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, CARRY, 0);
+}
+
+void exec_cld_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, DECIMAL, 0);
+}
+
+void exec_cli_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, IRQ_DISABLE, 0);
+}
+
+void exec_clv_op(NES *nes) {
+    set_cpu_status_bit(nes->cpu, OVERFLOW, 0);
+}
+
+void exec_cmp_op(NES *nes, Inst *inst) {
+    uint8_t result = nes->cpu->acc_reg - inst->operand_val;
+    set_cpu_status_bit(nes->cpu, CARRY, nes->cpu->acc_reg >= inst->operand_val);
+    set_cpu_status_bit(nes->cpu, ZERO, nes->cpu->acc_reg == inst->operand_val);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(result, 7));
+}
+
+void exec_cpx_op(NES *nes, Inst *inst) {
+    uint8_t result = nes->cpu->x_reg - inst->operand_val;
+    set_cpu_status_bit(nes->cpu, CARRY, nes->cpu->x_reg >= inst->operand_val);
+    set_cpu_status_bit(nes->cpu, ZERO, nes->cpu->x_reg == inst->operand_val);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(result, 7));
+}
+
+void exec_cpy_op(NES *nes, Inst *inst) {
+    uint8_t result = nes->cpu->y_reg - inst->operand_val;
+    set_cpu_status_bit(nes->cpu, CARRY, nes->cpu->y_reg >= inst->operand_val);
+    set_cpu_status_bit(nes->cpu, ZERO, nes->cpu->y_reg == inst->operand_val);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(result, 7));
+}
+
+void exec_dec_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+    update_cpu_status(nes, --(*access_ram(nes->ram, inst->operand_mem_addr)));
+}
+
+void exec_dex_op(NES *nes) {
+    update_cpu_status(nes, --nes->cpu->x_reg);
+}
+
+void exec_dey_op(NES *nes) {
+    update_cpu_status(nes, --nes->cpu->y_reg);
+}
+
+void exec_eor_op(NES *nes, Inst *inst) {
+    update_cpu_status(nes, nes->cpu->acc_reg ^= inst->operand_val);
+}
+
+void exec_inc_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+    update_cpu_status(nes, ++(*access_ram(nes->ram, inst->operand_mem_addr)));
+}
+
+void exec_inx_op(NES *nes) {
+    update_cpu_status(nes, ++nes->cpu->x_reg);
+}
+
+void exec_iny_op(NES *nes) {
+    update_cpu_status(nes, ++nes->cpu->y_reg);
+}
+
+void exec_jmp_op(NES *nes, Inst *inst) {
+    uint16_t operand;
+    if (inst->addr_mode == ABSOLUTE) {
+        operand = inst->operand_mem_addr;
+    } else { // INDIRECT memory addressing mode
+        if ((inst->operand_mem_addr & 0xff) == 0xff) { // emulate 6502 page boundary bug
+            operand = (*access_ram(nes->ram, inst->operand_mem_addr & 0xff00) << 8) | // most significant bits from 0x__00
+                *access_ram(nes->ram, inst->operand_mem_addr); // normal least significant bits
+        } else {
+            operand = inst->operand_val;
+        }
+    }
+
+    nes->cpu->program_c = operand;
+}
+
+void exec_jsr_op(NES *nes, Inst *inst) {
+    stack_push16(nes, inst->operand_mem_addr - 1);
+    nes->cpu->program_c = inst->operand_mem_addr;
+} 
+
+void exec_lda_op(NES *nes, Inst *inst) {
+    update_cpu_status(nes, nes->cpu->acc_reg = inst->operand_val);
+}
+
+void exec_ldx_op(NES *nes, Inst *inst) {
+    update_cpu_status(nes, nes->cpu->x_reg = inst->operand_val);
+}
+
+void exec_ldy_op(NES *nes, Inst *inst) {
+    update_cpu_status(nes, nes->cpu->y_reg = inst->operand_val);
+}
+
+void exec_lsr_op(NES *nes, Inst *inst) {
+    inst->page_cross_cycles = 0; // resolve difference in absolute x addressing mode cycles
+    uint8_t operand;
+    if (inst->addr_mode == ACCUMULATOR) {
+        set_cpu_status_bit(nes->cpu, CARRY, get_bit(nes->cpu->acc_reg, 7)); // most significant bit moved to carry
+        operand = (nes->cpu->acc_reg >>= 1);
+    } else { // shift memory contents
+        set_cpu_status_bit(nes->cpu, CARRY, get_bit(*access_ram(nes->ram, inst->operand_mem_addr), 7)); // most significant bit moved to carry
+        operand = (*access_ram(nes->ram, inst->operand_mem_addr) >>= 1);
+    }
+    set_cpu_status_bit(nes->cpu, ZERO, !operand);
+    set_cpu_status_bit(nes->cpu, NEGATIVE, get_bit(operand, 7));
+}
+
 void exec_inst(NES *nes, Inst *inst) {
     update_inst_operand(nes, inst);
     switch(inst->inst_type) {
@@ -119,68 +329,100 @@ void exec_inst(NES *nes, Inst *inst) {
             exec_adc_op(nes, inst);
             break;
         case AND_OP:
+            exec_and_op(nes, inst);
             break;
         case ASL_OP:
+            exec_asl_op(nes, inst);
             break;
         case BCC_OP:
+            exec_bcc_op(nes, inst);
             break;
         case BCS_OP:
+            exec_bcs_op(nes, inst);
             break;
         case BEQ_OP:
+            exec_beq_op(nes, inst);
             break;
         case BIT_OP:
+            exec_bit_op(nes, inst);
             break;
         case BMI_OP:
+            exec_bmi_op(nes, inst);
             break;
         case BNE_OP:
+            exec_bne_op(nes, inst);
             break;
         case BPL_OP:
+            exec_bpl_op(nes, inst);
             break;
         case BRK_OP:
+            exec_brk_op(nes);
             break;
         case BVC_OP:
+            exec_bvc_op(nes, inst);
             break;
         case BVS_OP:
+            exec_bvs_op(nes, inst);
             break;
         case CLC_OP:
+            exec_clc_op(nes);
             break;
         case CLD_OP:
+            exec_cld_op(nes);
             break;
         case CLI_OP:
+            exec_cli_op(nes);
             break;
         case CLV_OP:
+            exec_clv_op(nes);
             break;
         case CMP_OP:
+            exec_cmp_op(nes, inst);
             break;
         case CPX_OP:
+            exec_cpx_op(nes, inst);
             break;
         case CPY_OP:
+            exec_cpx_op(nes, inst);
             break;
         case DEC_OP:
+            exec_dec_op(nes, inst);
             break;
         case DEX_OP:
+            exec_dex_op(nes);
             break;
         case DEY_OP:
+            exec_dey_op(nes);
             break;
         case EOR_OP:
+            exec_eor_op(nes, inst);
             break;
         case INC_OP:
+            exec_inc_op(nes, inst);
             break;
         case INX_OP:
+            exec_inx_op(nes);
             break;
         case INY_OP:
+            exec_iny_op(nes);
             break;
         case JMP_OP:
+            exec_jmp_op(nes, inst);
             break;
         case JSR_OP:
+            exec_jsr_op(nes, inst);
             break;
         case LDA_OP:
+            exec_lda_op(nes, inst);
             break;
         case LDX_OP:
+            exec_ldx_op(nes, inst);
             break;
         case LDY_OP:
+            exec_ldy_op(nes, inst);
             break;
         case LSR_OP:
+            exec_lsr_op(nes, inst);
             break;
         case ORA_OP:
             break;
@@ -373,7 +615,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BCC_OP;
                 break;
@@ -382,7 +624,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BCS_OP;
                 break;
@@ -391,7 +633,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BEQ_OP;
                 break;
@@ -413,7 +655,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BMI_OP;
                 break;
@@ -422,7 +664,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BNE_OP;
                 break;
@@ -431,7 +673,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BPL_OP;
                 break;
@@ -447,7 +689,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BVC_OP;
                 break;
@@ -456,7 +698,7 @@ void classify_inst(uint8_t opcode, Inst *inst) {
                 inst->addr_mode = RELATIVE;
                 inst->size_bytes = 2;
                 inst->cycles = 2;
-                inst->page_cross_cycles = 2;
+                inst->page_cross_cycles = 1;
                 inst->branch_succeeds_cycles = 1;
                 inst->inst_type = BVS_OP;
                 break;
