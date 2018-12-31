@@ -10,10 +10,7 @@ CPU *new_CPU() {
 }
 
 inline void set_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position, bool value) {
-    if (value == 0)
-        cpu->status_reg &= ~(1 << bit_position);
-    else
-        cpu->status_reg |= (1 << bit_position);
+    set_bit(&cpu->status_reg, bit_position, value);
 }
 
 inline bool get_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position) {
@@ -22,6 +19,14 @@ inline bool get_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position) {
 
 inline bool get_bit(uint8_t byte, unsigned pos) {
     return byte & (1 << pos);
+}
+
+inline void set_bit(uint8_t *byte, unsigned pos, bool value) {
+    if (value == 0) {
+        *byte &= ~(1 << pos);
+    } else {
+        *byte |= (1 << pos);
+    }
 }
 
 void stack_push(NES *nes, uint8_t value) {

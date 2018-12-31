@@ -32,6 +32,7 @@ CPU *new_CPU();
 void set_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position, bool value);
 bool get_cpu_status_bit(CPU *cpu, STATUS_REG_BIT bit_position);
 bool get_bit(uint8_t byte, unsigned pos);
+void set_bit(uint8_t *byte, unsigned pos, bool value);
 void stack_push(NES *nes, uint8_t value);
 void stack_push16(NES *nes, uint16_t value);
 uint8_t stack_pull(NES *nes);
