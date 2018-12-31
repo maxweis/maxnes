@@ -16,14 +16,13 @@ int main(int argc, char *argv[]) {
     NES *nes = new_NES();
 
     if (!parse_rom(rom_file, nes->rom)) {
+        fclose(rom_file);
         fprintf(stderr, "Error: rom unrecognized format\n");
+        delete_nes(nes);
         return -1;
     } else {
-        parse_insts(nes->rom);
-    }
-
-    if (rom_file != NULL) {
         fclose(rom_file);
+        parse_insts(nes->rom);
     }
 
     delete_nes(nes);
