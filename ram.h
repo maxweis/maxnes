@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "nes.h"
+#include <stdbool.h>
 
 #define NES_RAM_SIZE 2048
 #define ZERO_PAGE_SIZE 256 
@@ -24,4 +24,5 @@ typedef enum ADDR_MODE {
     INDIRECT_Y
 } ADDR_MODE;
 
-uint8_t ram_read(uint8_t *ram, uint16_t addr);
+uint8_t *access_ram(uint8_t *ram, uint16_t addr);
+bool page_crossed(uint16_t addr1, uint16_t addr2);
