@@ -1,5 +1,4 @@
 #include "rom.h"
-#include "instruction.h"
 
 bool parse_rom(FILE *rom_file, ROM *rom) {
     if (rom_file == NULL) {

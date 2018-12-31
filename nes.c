@@ -1,10 +1,9 @@
 #include "nes.h"
 #include <stdlib.h>
-#include "ram.h"
 
 NES *new_NES() {
     NES *nes = (NES*) calloc(1, sizeof(NES));
-    nes->cpu = (CPU*) calloc(1, sizeof(CPU));
+    nes->cpu = new_CPU();
     nes->ram = (uint8_t*) calloc(NES_RAM_SIZE, sizeof(uint8_t));
     nes->rom = (ROM*) calloc(1, sizeof(ROM));
 

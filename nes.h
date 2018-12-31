@@ -2,6 +2,10 @@
 
 #include "cpu.h"
 #include "rom.h"
+#include "ram.h"
+
+typedef struct CPU CPU;
+typedef struct ROM ROM;
 
 typedef struct NES {
         CPU *cpu;

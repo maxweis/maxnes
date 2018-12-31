@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "instruction.h"
 
 #define PRG_LEN_BYTE_LOC 4
 #define PRG_BLOCK_SIZE 16384
